@@ -527,7 +527,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 	}
 
 	cmd := c.config.Cmd
-	cmd.Env = append(cmd.Env, os.Environ()...)
+	cmd.Env = append(os.Environ(), cmd.Env...)
 	cmd.Env = append(cmd.Env, env...)
 
 	// Use the client's stdin if configured, otherwise fallback to os.stdin
