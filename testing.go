@@ -93,7 +93,7 @@ func TestPluginRPCConn(t testing.T, ps map[string]Plugin, opts *TestOptions) (*R
 	go server.ServeConn(serverConn)
 
 	// Connect the client to the server
-	client, err := NewRPCClient(clientConn, ps)
+	client, err := NewRPCClient(clientConn, ps, nil)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
