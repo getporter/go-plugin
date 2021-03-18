@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/rpc"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/yamux"
 )
 
@@ -38,7 +39,9 @@ func newRPCClient(c *Client) (*RPCClient, error) {
 	}
 
 	// Create the actual RPC client
-	result, err := NewRPCClient(conn, c.config.Plugins)
+	cfg := yamux.DefaultConfig()
+	cfg.LogOutput = c.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true})
+	result, err := NewRPCClient(conn, c.config.Plugins, cfg)
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -58,9 +61,9 @@ func newRPCClient(c *Client) (*RPCClient, error) {
 
 // NewRPCClient creates a client from an already-open connection-like value.
 // Dial is typically used instead.
-func NewRPCClient(conn io.ReadWriteCloser, plugins map[string]Plugin) (*RPCClient, error) {
+func NewRPCClient(conn io.ReadWriteCloser, plugins map[string]Plugin, cfg *yamux.Config) (*RPCClient, error) {
 	// Create the yamux client so we can multiplex
-	mux, err := yamux.Client(conn, nil)
+	mux, err := yamux.Client(conn, cfg)
 	if err != nil {
 		conn.Close()
 		return nil, err
