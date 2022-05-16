@@ -55,7 +55,7 @@ func TestServer_testMode(t *testing.T) {
 		Reattach:         config,
 		AllowedProtocols: []Protocol{ProtocolGRPC},
 	})
-	client, err := c.Client()
+	client, err := c.Client(ctx)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
@@ -66,7 +66,7 @@ func TestServer_testMode(t *testing.T) {
 	}
 
 	// Kill which should do nothing
-	c.Kill()
+	c.Kill(ctx)
 	if err := client.Ping(); err != nil {
 		t.Fatalf("should not err: %s", err)
 	}

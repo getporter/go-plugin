@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,8 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+
 	// Create an hclog.Logger
 	logger := hclog.New(&hclog.LoggerOptions{
 		Name:   "plugin",
@@ -26,10 +29,10 @@ func main() {
 		Cmd:             exec.Command("./plugin/greeter"),
 		Logger:          logger,
 	})
-	defer client.Kill()
+	defer client.Kill(ctx)
 
 	// Connect via RPC
-	rpcClient, err := client.Client()
+	rpcClient, err := client.Client(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}

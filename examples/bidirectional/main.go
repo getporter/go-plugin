@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -19,6 +20,7 @@ func (*addHelper) Sum(a, b int64) (int64, error) {
 }
 
 func main() {
+	ctx := context.Background()
 	// We don't want to see the plugin logs.
 	log.SetOutput(ioutil.Discard)
 
@@ -30,10 +32,10 @@ func main() {
 		AllowedProtocols: []plugin.Protocol{
 			plugin.ProtocolNetRPC, plugin.ProtocolGRPC},
 	})
-	defer client.Kill()
+	defer client.Kill(ctx)
 
 	// Connect via RPC
-	rpcClient, err := client.Client()
+	rpcClient, err := client.Client(ctx)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		os.Exit(1)

@@ -274,7 +274,7 @@ func (s *SecureConfig) Check(filePath string) (bool, error) {
 // plugins exits.
 //
 // This must only be called _once_.
-func CleanupClients() {
+func CleanupClients(ctx context.Context) {
 	// Set the killed to true so that we don't get unexpected panics
 	atomic.StoreUint32(&Killed, 1)
 
@@ -286,7 +286,7 @@ func CleanupClients() {
 		wg.Add(1)
 
 		go func(client *Client) {
-			client.Kill()
+			client.Kill(ctx)
 			wg.Done()
 		}(client)
 	}
@@ -351,8 +351,8 @@ func NewClient(config *ClientConfig) (c *Client) {
 // Client returns the protocol client for this connection.
 //
 // Subsequent calls to this will return the same client.
-func (c *Client) Client() (ClientProtocol, error) {
-	_, err := c.Start()
+func (c *Client) Client(ctx context.Context) (ClientProtocol, error) {
+	_, err := c.Start(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +404,7 @@ func (c *Client) killed() bool {
 // This method blocks until the process successfully exits.
 //
 // This method can safely be called multiple times.
-func (c *Client) Kill() {
+func (c *Client) Kill(ctx context.Context) {
 	// Grab a lock to read some private fields.
 	c.l.Lock()
 	process := c.process
@@ -434,7 +434,7 @@ func (c *Client) Kill() {
 	graceful := false
 	if addr != nil {
 		// Close the client to cleanly exit the process.
-		client, err := c.Client()
+		client, err := c.Client(ctx)
 		if err == nil {
 			err = client.Close()
 
@@ -457,9 +457,14 @@ func (c *Client) Kill() {
 	// doneCh which would be closed if the process exits.
 	if graceful {
 		select {
+		case <-ctx.Done():
+			// do not log here, the logger locks and could cause a deadlock
+			c.HardKill()
+			return
 		case <-c.doneCtx.Done():
 			c.logger.Debug("plugin exited")
 			return
+		
 		case <-time.After(2 * time.Second):
 		}
 	}
@@ -473,19 +478,32 @@ func (c *Client) Kill() {
 	c.l.Unlock()
 }
 
+// HardKill requests that the plugin process is killed, and doesn't
+// attempt to perform any blocking operations.
+// Kill should be used when closing the plugin normally.
+// HardKill is suitable for forcing the plugin to close when the parent
+// process must exit immediately and should not block.
+func (c *Client) HardKill() {
+	// do not log here, the logger uses locks and can end up deadlocking
+	if c.process != nil {
+		c.process.Kill()
+	}
+}
+
 // Starts the underlying subprocess, communicating with it to negotiate
 // a port for RPC connections, and returning the address to connect via RPC.
 //
 // This method is safe to call multiple times. Subsequent calls have no effect.
 // Once a client has been started once, it cannot be started again, even if
 // it was killed.
-func (c *Client) Start() (addr net.Addr, err error) {
+func (c *Client) Start(ctx context.Context) (addr net.Addr, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if c.address != nil {
 		return c.address, nil
 	}
+
 
 	// If one of cmd or reattach isn't set, then it is an error. We wrap
 	// this in a {} for scoping reasons, and hopeful that the escape
@@ -689,6 +707,11 @@ func (c *Client) Start() (addr net.Addr, err error) {
 	// Start looking for the address
 	c.logger.Debug("waiting for RPC address", "path", cmd.Path)
 	select {
+	case <-ctx.Done():
+		// do not log here, the logger uses locks and can end up deadlocking
+		c.HardKill()
+		err = fmt.Errorf("plugin start canceled: %w", ctx.Err())
+		return
 	case <-timeout:
 		err = errors.New("timeout while waiting for plugin to start")
 	case <-c.doneCtx.Done():
@@ -931,8 +954,8 @@ func (c *Client) ReattachConfig() *ReattachConfig {
 // starting the plugin are surpressed and ProtocolInvalid is returned. It
 // is recommended you call Start explicitly before calling Protocol to ensure
 // no errors occur.
-func (c *Client) Protocol() Protocol {
-	_, err := c.Start()
+func (c *Client) Protocol(ctx context.Context) Protocol {
+	_, err := c.Start(ctx)
 	if err != nil {
 		return ProtocolInvalid
 	}

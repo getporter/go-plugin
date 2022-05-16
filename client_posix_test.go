@@ -4,6 +4,7 @@
 package plugin
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"syscall"
@@ -12,6 +13,8 @@ import (
 )
 
 func TestClient_testInterfaceReattach(t *testing.T) {
+	ctx := context.Background()
+
 	// Setup the process for daemonization
 	process := helperProcess("test-interface-daemon")
 	if process.SysProcAttr == nil {
@@ -27,21 +30,21 @@ func TestClient_testInterfaceReattach(t *testing.T) {
 	})
 
 	// Start it so we can get the reattach info
-	if _, err := c.Start(); err != nil {
+	if _, err := c.Start(ctx); err != nil {
 		t.Fatalf("err should be nil, got %s", err)
 	}
 
 	// New client with reattach info
 	reattach := c.ReattachConfig()
 	if reattach == nil {
-		c.Kill()
+		c.Kill(ctx)
 		t.Fatal("reattach config should be non-nil")
 	}
 
 	// Find the process and defer a kill so we know it is gone
 	p, err := os.FindProcess(reattach.Pid)
 	if err != nil {
-		c.Kill()
+		c.Kill(ctx)
 		t.Fatalf("couldn't find process: %s", err)
 	}
 	defer p.Kill()
@@ -54,7 +57,7 @@ func TestClient_testInterfaceReattach(t *testing.T) {
 	})
 
 	// Start shouldn't error
-	if _, err := c.Start(); err != nil {
+	if _, err := c.Start(ctx); err != nil {
 		t.Fatalf("err: %s", err)
 	}
 
@@ -65,7 +68,7 @@ func TestClient_testInterfaceReattach(t *testing.T) {
 	}
 
 	// Grab the RPC client
-	client, err := c.Client()
+	client, err := c.Client(ctx)
 	if err != nil {
 		t.Fatalf("err should be nil, got %s", err)
 	}
@@ -96,7 +99,7 @@ func TestClient_testInterfaceReattach(t *testing.T) {
 	}
 
 	// Kill it
-	c.Kill()
+	c.Kill(ctx)
 
 	// Test that it knows it is exited
 	if !c.Exited() {
